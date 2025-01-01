@@ -2,6 +2,7 @@ package com.example.test.demos.dto;
 
 import lombok.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.stringtemplate.v4.ST;
 
 /**
  * 用于接收微信消息的请求数据。
@@ -23,7 +24,7 @@ public class MessageRequestDTO {
     private String content;
 
     /**
-     * 消息的相关发送方数据，JSON 格式的字符串。
+     * 消息的相关发送方数据
      */
     private String source;
 

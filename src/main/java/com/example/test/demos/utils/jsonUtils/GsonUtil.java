@@ -6,6 +6,9 @@ import com.google.gson.JsonParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
 /**
  * Gson工具类，用于处理JSON相关操作
  */
@@ -32,10 +35,21 @@ public final class GsonUtil {
                 logger.warn("Input JSON string is null or empty");
                 return null;
             }
+            // 添加调试日志
+            logger.debug("Input JSON string bytes: " + Arrays.toString(jsonString.getBytes("UTF-8")));
+            logger.debug("Input JSON string length: " + jsonString.length());
 
-            JsonElement jsonElement = JsonParser.parseString(jsonString);
+            // 确保UTF-8编码
+            byte[] bytes = jsonString.getBytes(StandardCharsets.UTF_8);
+            String utf8JsonString = new String(bytes, StandardCharsets.UTF_8);
+
+            JsonElement jsonElement = JsonParser.parseString(utf8JsonString);
+
+
             JsonObject jsonObject = jsonElement.getAsJsonObject();
-            
+            // 添加解析后的调试日志
+            logger.debug("Parsed JSON: " + jsonElement.toString());
+
             // 获取from对象
             JsonObject fromObject = jsonObject.getAsJsonObject("from");
             if (fromObject == null) {

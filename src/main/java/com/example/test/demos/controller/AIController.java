@@ -1,25 +1,16 @@
 package com.example.test.demos.controller;
-
 import com.example.test.demos.dto.*;
-import com.example.test.demos.enums.Prompt;
 import com.example.test.demos.pojo.ContextPrompt;
-
 import com.example.test.demos.servicer.ContextPromptService;
-import com.example.test.demos.utils.jsonUtils.GsonUtil;
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-
 import javax.validation.Valid;
-
 import java.util.Optional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,13 +37,23 @@ public class AIController {
 
         long startTime = System.currentTimeMillis();
 
+        // 将source字符串转换为Source对象
+        Source sourceObj;
+        try {
+            sourceObj = gson.fromJson(messageRequest.getSource(), Source.class);
+        } catch (Exception e) {
+            logger.error("Failed to parse source JSON: {}", messageRequest.getSource(), e);
+            return MessageResponseDTO.builder().success(false).build();
+        }
+
         logger.info("接收到消息: type={}, isMentioned={}, isMsgFromSelf={}",
                 messageRequest.getType(),
                 messageRequest.getIsMentioned(),
                 messageRequest.getIsMsgFromSelf());
-        System.out.println(messageRequest.getSource());
-        // 解析 source 字段，提取用户昵称
-        String userNickname = GsonUtil.extractFromPayloadName(messageRequest.getSource());
+
+
+        String userNickname = sourceObj.getFrom().getPayload().getName();
+        System.out.println(userNickname);
 
         if (userNickname == null || userNickname.isEmpty()) {
             logger.warn("无法解析用户昵称，source={}", messageRequest.getSource());
