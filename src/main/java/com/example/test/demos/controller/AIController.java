@@ -53,7 +53,7 @@ public class AIController {
 
 
         String userNickname = sourceObj.getFrom().getPayload().getName();
-        System.out.println(userNickname);
+        logger.info("用户提问: {}", userNickname);
 
         if (userNickname == null || userNickname.isEmpty()) {
             logger.warn("无法解析用户昵称，source={}", messageRequest.getSource());
@@ -69,6 +69,9 @@ public class AIController {
         // 获取当前的历史对话
         Optional<ContextPrompt> contextOpt = contextPromptService.getContextPrompt(userNickname);
         StringBuilder promptBuilder = new StringBuilder();
+
+        // 将接收到的消息添加到历史记录
+        contextPromptService.addMessage(userNickname, messageContent, "用户");
 
         if (contextOpt.isPresent()) {
             for (String msg : contextOpt.get().getHistory()) {
@@ -102,11 +105,16 @@ public class AIController {
 
         logger.info("AI 回复: {}", aiResponse);
 
-        // 将接收到的消息添加到历史记录
-        contextPromptService.addMessage(userNickname, messageContent, "用户");
-
         // 将 AI 的回复添加到历史记录
         contextPromptService.addMessage(userNickname, aiResponse, "AI");
+
+        contextOpt = contextPromptService.getContextPrompt(userNickname);
+        if (contextOpt.isPresent()) {
+            for (String msg : contextOpt.get().getHistory()) {
+                System.out.println(msg);
+            }
+        }
+
 
         // 构建回复数据
         ReplyDataDTO replyData = ReplyDataDTO.builder()
