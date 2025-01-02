@@ -1,5 +1,9 @@
 package com.example.test.demos.dto;
 
+import com.example.test.demos.enums.MessageType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.google.gson.Gson;
 import lombok.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.stringtemplate.v4.ST;
@@ -11,30 +15,37 @@ import org.stringtemplate.v4.ST;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class MessageRequestDTO {
-
-    /**
-     * 功能类型，例如 text, file, urlLink 等。
-     */
     private String type;
-
-    /**
-     * 传输的内容，文本消息时为字符串。
-     */
     private String content;
-
-    /**
-     * 消息的相关发送方数据
-     */
     private String source;
-
-    /**
-     * 该消息是否 @ 您，"1" 或 "0"。
-     */
     private String isMentioned;
-
-    /**
-     * 该消息是否来自您自己，"1" 或 "0"。
-     */
     private String isMsgFromSelf;
+
+    @JsonIgnore
+    private Source parsedSource;
+
+    public MessageType getMessageType() {
+        return MessageType.fromString(type);
+    }
+
+    public boolean isSystemEvent() {
+        return type != null && type.startsWith("system_event_");
+    }
+
+    public String getUserNickname() {
+        if (parsedSource == null || parsedSource.getFrom() == null
+                || parsedSource.getFrom().getPayload() == null) {
+            return null;
+        }
+        return parsedSource.getFrom().getPayload().getName();
+    }
+
+    public void parseSource(Gson gson) {
+        if (source != null) {
+            this.parsedSource = gson.fromJson(source, Source.class);
+        }
+    }
 }
+

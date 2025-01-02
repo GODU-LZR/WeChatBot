@@ -1,16 +1,10 @@
 package com.example.test.demos.controller;
 import com.example.test.demos.dto.*;
-import com.example.test.demos.pojo.ContextPrompt;
-import com.example.test.demos.servicer.ContextPromptService;
+import com.example.test.demos.servicer.TextAiService;
 import com.google.gson.Gson;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import javax.validation.Valid;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,117 +16,64 @@ public class AIController {
 
     private static final Logger logger = LoggerFactory.getLogger(AIController.class);
 
-    private final ChatClient chatClient;
-    private final ContextPromptService contextPromptService;
+    private final TextAiService textAiService;
     private final Gson gson;
 
-    /**
-     * 接受微信消息并快速回复单条消息
-     */
-    @Operation(summary = "接受微信消息并快速回复", description = "处理来自微信的消息请求，并根据需要进行自定义快速回复。")
-    @ApiResponse(responseCode = "200", description = "成功处理消息并返回回复")
-    @PostMapping(value = "/receiveMessage", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public MessageResponseDTO receiveMessage(
-            @Valid @ModelAttribute MessageRequestDTO messageRequest) {
-
-        long startTime = System.currentTimeMillis();
-
-        // 将source字符串转换为Source对象
-        Source sourceObj;
-        try {
-            sourceObj = gson.fromJson(messageRequest.getSource(), Source.class);
-        } catch (Exception e) {
-            logger.error("Failed to parse source JSON: {}", messageRequest.getSource(), e);
-            return MessageResponseDTO.builder().success(false).build();
-        }
+    // AIController.java 中的处理逻辑
+    @PostMapping("/receiveMessage")
+    public MessageResponseDTO receiveMessage(@Valid @ModelAttribute MessageRequestDTO messageRequest) {
+        messageRequest.parseSource(gson);
 
         logger.info("接收到消息: type={}, isMentioned={}, isMsgFromSelf={}",
-                messageRequest.getType(),
-                messageRequest.getIsMentioned(),
-                messageRequest.getIsMsgFromSelf());
+                messageRequest.getType(), messageRequest.getIsMentioned(), messageRequest.getIsMsgFromSelf());
 
+        // 根据消息类型处理
+        return switch (messageRequest.getMessageType()) {
+            case TEXT -> handleTextMessage(messageRequest);
+            case SYSTEM_EVENT_LOGIN -> handleLoginEvent(messageRequest);
+            case SYSTEM_EVENT_PUSH_NOTIFY -> handlePushNotify(messageRequest);
+            default -> MessageResponseDTO.builder().success(false).build();
+        };
+    }
 
-        String userNickname = sourceObj.getFrom().getPayload().getName();
-        logger.info("用户提问: {}", userNickname);
-
-        if (userNickname == null || userNickname.isEmpty()) {
+    private MessageResponseDTO handleTextMessage(MessageRequestDTO messageRequest) {
+        // 检查用户昵称
+        String username = messageRequest.getUserNickname();
+        if (username == null) {
             logger.warn("无法解析用户昵称，source={}", messageRequest.getSource());
             return MessageResponseDTO.builder().success(false).build();
         }
 
-        String messageContent = messageRequest.getContent();
-
-        logger.info("处理消息内容: {}", messageContent);
-
-
-
-        // 获取当前的历史对话
-        Optional<ContextPrompt> contextOpt = contextPromptService.getContextPrompt(userNickname);
-        StringBuilder promptBuilder = new StringBuilder();
-
-        // 将接收到的消息添加到历史记录
-        contextPromptService.addMessage(userNickname, messageContent, "用户");
-
-        if (contextOpt.isPresent()) {
-            for (String msg : contextOpt.get().getHistory()) {
-                promptBuilder.append(msg).append("\n");
-            }
-        } else {
-            // 如果没有历史记录，初始化对话
-            logger.warn("用户 '{}' 没有历史记录，初始化中...", userNickname);
-            contextPromptService.addMessage(userNickname, "初始化对话", "系统");
-            contextOpt = contextPromptService.getContextPrompt(userNickname);
-            if (contextOpt.isPresent()) {
-                for (String msg : contextOpt.get().getHistory()) {
-                    promptBuilder.append(msg).append("\n");
-                }
-            }
-        }
-
-        logger.debug("生成的提示词: {}", promptBuilder.toString());
-
-        // 调用 ChatClient 生成回复
-        String aiResponse;
-        try {
-            aiResponse = this.chatClient.prompt()
-                    .user(promptBuilder.toString()+messageContent+"AI:")
-                    .call()
-                    .content();
-        } catch (Exception e) {
-            logger.error("调用 ChatClient 生成回复时发生错误", e);
+        // 生成AI回复
+        String reply = textAiService.generateAIResponse(username, messageRequest.getContent());
+        if (reply == null || reply.trim().isEmpty()) {
+            logger.warn("AI回复内容为空");
             return MessageResponseDTO.builder().success(false).build();
         }
 
-        logger.info("AI 回复: {}", aiResponse);
-
-        // 将 AI 的回复添加到历史记录
-        contextPromptService.addMessage(userNickname, aiResponse, "AI");
-
-        contextOpt = contextPromptService.getContextPrompt(userNickname);
-        if (contextOpt.isPresent()) {
-            for (String msg : contextOpt.get().getHistory()) {
-                System.out.println(msg);
-            }
-        }
-
-
         // 构建回复数据
         ReplyDataDTO replyData = ReplyDataDTO.builder()
-                .type("text")
-                .content(aiResponse)
+                .type("text")                // 设置为文本类型
+                .content(reply)              // 设置AI生成的回复内容
+                .build();                    // fileAlias不需要设置,因为是文本消息
+
+        // 构建并返回响应
+        return MessageResponseDTO.builder()
+                .success(true)               // 设置处理成功
+                .data(replyData)            // 设置回复数据
                 .build();
+    }
 
-        // 构建响应对象
-        MessageResponseDTO response = MessageResponseDTO.builder()
-                .success(true)
-                .data(replyData)
-                .build();
 
-        long endTime = System.currentTimeMillis();
-        long duration = endTime - startTime;
-        logger.info("处理消息耗时: {} ms", duration);
 
-        return response;
+    private MessageResponseDTO handleLoginEvent(MessageRequestDTO messageRequest) {
+        logger.info("处理登录事件: {}", messageRequest.getContent());
+        return MessageResponseDTO.builder().success(true).build();
+    }
+
+    private MessageResponseDTO handlePushNotify(MessageRequestDTO messageRequest) {
+        logger.info("处理送达通知: {}", messageRequest.getContent());
+        return MessageResponseDTO.builder().success(true).build();
     }
 
 }
