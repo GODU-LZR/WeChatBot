@@ -1,30 +1,31 @@
 package com.example.test.demos.controller;
 import com.example.test.demos.dto.*;
-import com.example.test.demos.servicer.TextAiService;
+import com.example.test.demos.servicer.TextChatService;
 import com.google.gson.Gson;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import javax.validation.Valid;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+
+@Slf4j
 @RestController
 @RequestMapping("/ai")
-@RequiredArgsConstructor
 @io.swagger.v3.oas.annotations.tags.Tag(name = "AI 聊天接口", description = "与 ChatGPT 进行交互的 API")
 public class AIController {
 
-    private static final Logger logger = LoggerFactory.getLogger(AIController.class);
+    @Autowired(required = false)
+    private TextChatService textChatService;
 
-    private final TextAiService textAiService;
-    private final Gson gson;
+    @Autowired(required = false)
+    private  Gson gson;
 
     // AIController.java 中的处理逻辑
     @PostMapping("/receiveMessage")
     public MessageResponseDTO receiveMessage(@Valid @ModelAttribute MessageRequestDTO messageRequest) {
         messageRequest.parseSource(gson);
 
-        logger.info("接收到消息: type={}, isMentioned={}, isMsgFromSelf={}",
+        log.info("接收到消息: type={}, isMentioned={}, isMsgFromSelf={}",
                 messageRequest.getType(), messageRequest.getIsMentioned(), messageRequest.getIsMsgFromSelf());
 
         // 根据消息类型处理
@@ -40,14 +41,14 @@ public class AIController {
         // 检查用户昵称
         String username = messageRequest.getUserNickname();
         if (username == null) {
-            logger.warn("无法解析用户昵称，source={}", messageRequest.getSource());
+            log.warn("无法解析用户昵称，source={}", messageRequest.getSource());
             return MessageResponseDTO.builder().success(false).build();
         }
 
         // 生成AI回复
-        String reply = textAiService.generateAIResponse(username, messageRequest.getContent());
+        String reply = textChatService.generateTextAIResponse(username, messageRequest.getContent());
         if (reply == null || reply.trim().isEmpty()) {
-            logger.warn("AI回复内容为空");
+            log.warn("AI回复内容为空");
             return MessageResponseDTO.builder().success(false).build();
         }
 
@@ -64,15 +65,13 @@ public class AIController {
                 .build();
     }
 
-
-
     private MessageResponseDTO handleLoginEvent(MessageRequestDTO messageRequest) {
-        logger.info("处理登录事件: {}", messageRequest.getContent());
+        log.info("处理登录事件: {}", messageRequest.getContent());
         return MessageResponseDTO.builder().success(true).build();
     }
 
     private MessageResponseDTO handlePushNotify(MessageRequestDTO messageRequest) {
-        logger.info("处理送达通知: {}", messageRequest.getContent());
+        log.info("处理送达通知: {}", messageRequest.getContent());
         return MessageResponseDTO.builder().success(true).build();
     }
 
